@@ -1,32 +1,58 @@
-use crate::header::{Encoding, Endian, Field, Header, KeyValue, PixelType, Version};
-use std::collections::HashSet;
+use crate::nrrd::{Encoding, Endian, Field, Nrrd, KeyValue, PixelType, Version};
+use std::{collections::HashSet, io::{BufRead, BufReader, Read}};
 
 pub enum ReadNrrdErr {
     DuplicateField(String),
     UnknownVersion(String),
-    UnsupportedEncoding(String),
     Malformed(String),
+    IOError(std::io::Error),
 }
 
-fn read_header(header_text: String) -> Result<Header, ReadNrrdErr> {
-    let mut lines = header_text.lines().enumerate();
-    let (_, magic_line) = lines
-        .next()
-        .ok_or(ReadNrrdErr::Malformed("Empty header".to_string()))?;
-    let version = try_read_magic(magic_line)?;
+impl From<std::io::Error> for ReadNrrdErr {
+    #[inline]
+    fn from(err: std::io::Error) -> Self {
+        ReadNrrdErr::IOError(err)
+    }
+}
+
+pub fn read_nrrd<T: Read>(reader: T) -> Result<Nrrd, ReadNrrdErr> {
+    let mut buf_reader = BufReader::new(reader);
+    
+    // let max_file_size = 1024 * 1024 * 1024 * 10; // 10 GB
+    // let buf_reader.take(max_file_size);
+
+    let mut nrrd = read_header(&mut buf_reader)?;
+    buf_reader.read_to_end(&mut nrrd.buffer)?;
+
+    Ok(nrrd)
+}
+
+fn read_header<T: BufRead>(reader: &mut T) -> Result<Nrrd, ReadNrrdErr> {
+    let mut line = String::new();
+    reader.read_line(&mut line)?;
+    let version = try_read_magic(&line)?;
 
     let mut fields = HashSet::new();
     let mut key_values = HashSet::new();
-
     let mut required_fields = RequiredFields::default();
+    let mut line_num = 0;
 
-    while let Some((line_num, line)) = lines.next() {
+    loop {
+        line.clear();
+        reader.read_line(&mut line)?;
+        line_num += 1;
+
+        if line == "\n" || line == "\r\n" {
+            // End of header
+            break;
+        }
+
         if line.starts_with('#') {
             // Comment
             continue;
         }
 
-        if let Some(field) = try_read_field(line) {
+        if let Some(field) = try_read_field(&line) {
             required_fields.parse(&field)?;
             let exist = fields.insert(field.clone());
 
@@ -47,7 +73,7 @@ fn read_header(header_text: String) -> Result<Header, ReadNrrdErr> {
             )));
         }
 
-        match try_read_key_value(line) {
+        match try_read_key_value(&line) {
             Some(kv) => key_values.insert(kv),
             None => {
                 return Err(ReadNrrdErr::Malformed(format!(
@@ -58,7 +84,7 @@ fn read_header(header_text: String) -> Result<Header, ReadNrrdErr> {
         };
     }
 
-    required_fields.validate().map(|required| Header {
+    required_fields.validate().map(|required| Nrrd {
         version,
         fields,
         key_values,
@@ -67,6 +93,7 @@ fn read_header(header_text: String) -> Result<Header, ReadNrrdErr> {
         pixel_type: required.pixel_type.unwrap(),
         encoding: required.encoding.unwrap(),
         endian: required.endian.unwrap_or(Endian::Little),
+        buffer: Vec::new(),
     })
 }
 

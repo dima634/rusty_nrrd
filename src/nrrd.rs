@@ -87,7 +87,7 @@ pub enum Endian {
 }
 
 #[derive(Debug, Clone)]
-pub struct Header {
+pub struct Nrrd {
     pub version: Version,
     pub fields: HashSet<Field>,
     pub key_values: HashSet<KeyValue>,
@@ -97,4 +97,6 @@ pub struct Header {
     pub pixel_type: PixelType,
     pub encoding: Encoding,
     pub endian: Endian,
+
+    pub buffer: Vec<u8>,
 }
