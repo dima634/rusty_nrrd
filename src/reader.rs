@@ -1,4 +1,4 @@
-use crate::header::{Encoding, Field, Header, KeyValue, PixelType, Version};
+use crate::header::{Encoding, Endian, Field, Header, KeyValue, PixelType, Version};
 use std::collections::HashSet;
 
 pub enum ReadNrrdErr {
@@ -66,6 +66,7 @@ fn read_header(header_text: String) -> Result<Header, ReadNrrdErr> {
         sizes: required.sizes.unwrap(),
         pixel_type: required.pixel_type.unwrap(),
         encoding: required.encoding.unwrap(),
+        endian: required.endian.unwrap_or(Endian::Little),
     })
 }
 
@@ -75,6 +76,8 @@ struct RequiredFields {
     sizes: Option<Vec<i32>>,
     pixel_type: Option<PixelType>,
     encoding: Option<Encoding>,
+    block_size: Option<i32>,
+    endian: Option<Endian>,
 }
 
 impl RequiredFields {
@@ -84,6 +87,8 @@ impl RequiredFields {
             "SIZES" => self.try_parse_sizes(field),
             "TYPE" => self.try_parse_type(field),
             "ENCODING" => self.try_parse_encoding(field),
+            "BLOCK SIZE" | "BLOCKSIZE" => self.try_parse_block_size(field),
+            "ENDIAN" => self.try_parse_endian(field),
             _ => Ok(()),
         }
     }
@@ -142,7 +147,7 @@ impl RequiredFields {
             "ulonglong" | "unsigned long long" | "unsigned long long int" | "uint64" | "uint64_t" => PixelType::UInt64,
             "float" => PixelType::Float32,
             "double" => PixelType::Float64,
-            "block" => PixelType::Block,
+            "block" => PixelType::Block(0), // Placeholder block size
             _ => return Err(ReadNrrdErr::Malformed("Invalid TYPE value".to_string())),
         };
 
@@ -163,7 +168,27 @@ impl RequiredFields {
         Ok(())
     }
 
-    fn validate(self) -> Result<Self, ReadNrrdErr> {
+    fn try_parse_block_size(&mut self, field: &Field) -> Result<(), ReadNrrdErr> {
+        let block_size = field.descriptor.parse().map_err(|_| {
+            let err = format!("Invalid BLOCK SIZE value");
+            ReadNrrdErr::Malformed(err)
+        })?;
+        self.block_size = Some(block_size);
+        Ok(())
+    }
+
+    fn try_parse_endian(&mut self, field: &Field) -> Result<(), ReadNrrdErr> {
+        let endian = match field.descriptor.as_str() {
+            "little" => Endian::Little,
+            "big" => Endian::Big,
+            _ => return Err(ReadNrrdErr::Malformed("Invalid ENDIAN value".to_string())),
+        };
+
+        self.endian = Some(endian);
+        Ok(())
+    }
+
+    fn validate(mut self) -> Result<Self, ReadNrrdErr> {
         if self.dimension.is_none() {
             return Err(ReadNrrdErr::Malformed("Missing DIMENSION field".to_string()));
         }
@@ -172,9 +197,24 @@ impl RequiredFields {
             return Err(ReadNrrdErr::Malformed("Missing SIZES field".to_string()));
         }
 
-        if self.pixel_type.is_none() {
-            return Err(ReadNrrdErr::Malformed("Missing TYPE field".to_string()));
-        }
+        match &mut self.pixel_type {
+            Some(PixelType::Block(block_size)) => {
+                // Block type NRRD should have a positive block size
+                match self.block_size {
+                    Some(size) if size > 0 => *block_size = size,
+                    Some(_) => return Err(ReadNrrdErr::Malformed("Invalid BLOCK SIZE value".to_string())),
+                    None => return Err(ReadNrrdErr::Malformed("Missing BLOCK SIZE field".to_string())),
+                };
+            },
+            Some(_) => {
+                // NRRD that has type which size is bigger than 1 byte should have endian
+                match (self.endian, self.pixel_type) {
+                    (None, Some(PixelType::Int8)) | (None, Some(PixelType::UInt8)) => (),
+                    _ => return Err(ReadNrrdErr::Malformed("Missing ENDIAN field".to_string())),
+                };
+            },
+            None => return Err(ReadNrrdErr::Malformed("Missing TYPE field".to_string())),
+        };
 
         if self.encoding.is_none() {
             return Err(ReadNrrdErr::Malformed("Missing ENCODING field".to_string()));

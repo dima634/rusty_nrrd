@@ -1,6 +1,6 @@
 use std::{collections::HashSet, hash::Hash};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Version {
     Nrrd1,
     Nrrd2,
@@ -56,7 +56,7 @@ impl PartialEq for KeyValue {
 
 impl Eq for KeyValue {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum PixelType {
     Int8,
     UInt8,
@@ -68,10 +68,10 @@ pub enum PixelType {
     UInt64,
     Float32,
     Float64,
-    Block,
+    Block(i32),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Encoding {
     Raw,
     Ascii,
@@ -80,7 +80,13 @@ pub enum Encoding {
     Other(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
+pub enum Endian {
+    Little,
+    Big,
+}
+
+#[derive(Debug, Clone)]
 pub struct Header {
     pub version: Version,
     pub fields: HashSet<Field>,
@@ -90,4 +96,5 @@ pub struct Header {
     pub sizes: Vec<i32>,
     pub pixel_type: PixelType,
     pub encoding: Encoding,
+    pub endian: Endian,
 }
