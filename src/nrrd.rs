@@ -12,7 +12,7 @@ pub enum Version {
 /// <field>: <desc>
 #[derive(Debug, Clone)]
 pub struct Field {
-    pub identifier: String, // Case-sensitive
+    pub identifier: String, // Case-insensitive
     pub descriptor: String, // Whitespace at the end should be ignored
 }
 
@@ -56,7 +56,7 @@ impl PartialEq for KeyValue {
 
 impl Eq for KeyValue {}
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PixelType {
     Int8,
     UInt8,
@@ -71,7 +71,20 @@ pub enum PixelType {
     Block(i32),
 }
 
-#[derive(Debug, Clone)]
+impl PixelType {
+    /// Returns the size of the pixel type in bytes
+    pub fn size(self) -> usize {
+        match self {
+            PixelType::Int8 | PixelType::UInt8 => 1,
+            PixelType::Int16 | PixelType::UInt16 => 2,
+            PixelType::Int32 | PixelType::UInt32 | PixelType::Float32   => 4,
+            PixelType::Int64 | PixelType::UInt64 | PixelType::Float64 => 8,
+            PixelType::Block(size) => size as usize, // NRRD format accepts only positive block size so this should be safe
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Encoding {
     Raw,
     Ascii,

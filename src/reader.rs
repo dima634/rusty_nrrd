@@ -1,6 +1,10 @@
-use crate::nrrd::{Encoding, Endian, Field, Nrrd, KeyValue, PixelType, Version};
-use std::{collections::HashSet, io::{BufRead, BufReader, Read}};
+use crate::nrrd::{Encoding, Endian, Field, KeyValue, Nrrd, PixelType, Version};
+use std::{
+    collections::HashSet,
+    io::{BufRead, BufReader, Read},
+};
 
+#[derive(Debug)]
 pub enum ReadNrrdErr {
     DuplicateField(String),
     UnknownVersion(String),
@@ -17,12 +21,16 @@ impl From<std::io::Error> for ReadNrrdErr {
 
 pub fn read_nrrd<T: Read>(reader: T) -> Result<Nrrd, ReadNrrdErr> {
     let mut buf_reader = BufReader::new(reader);
-    
+
     // let max_file_size = 1024 * 1024 * 1024 * 10; // 10 GB
     // let buf_reader.take(max_file_size);
 
     let mut nrrd = read_header(&mut buf_reader)?;
     buf_reader.read_to_end(&mut nrrd.buffer)?;
+
+    if !validate_buffer_size(&nrrd) {
+        return Err(ReadNrrdErr::Malformed("Buffer size mismatch".to_string()));
+    }
 
     Ok(nrrd)
 }
@@ -30,6 +38,7 @@ pub fn read_nrrd<T: Read>(reader: T) -> Result<Nrrd, ReadNrrdErr> {
 fn read_header<T: BufRead>(reader: &mut T) -> Result<Nrrd, ReadNrrdErr> {
     let mut line = String::new();
     reader.read_line(&mut line)?;
+    remove_trailing_new_line(&mut line);
     let version = try_read_magic(&line)?;
 
     let mut fields = HashSet::new();
@@ -40,6 +49,15 @@ fn read_header<T: BufRead>(reader: &mut T) -> Result<Nrrd, ReadNrrdErr> {
     loop {
         line.clear();
         reader.read_line(&mut line)?;
+        remove_trailing_new_line(&mut line);
+        
+        // Remove trailing newline characters
+        if line.ends_with("\r\n") {
+            line.truncate(line.len() - 2);
+        } else if line.ends_with('\n') {
+            line.pop();
+        }
+
         line_num += 1;
 
         if line == "\n" || line == "\r\n" {
@@ -110,12 +128,12 @@ struct RequiredFields {
 impl RequiredFields {
     fn parse(&mut self, field: &Field) -> Result<(), ReadNrrdErr> {
         match field.identifier.as_str() {
-            "DIMENSION" => self.try_parse_dimension(field),
-            "SIZES" => self.try_parse_sizes(field),
-            "TYPE" => self.try_parse_type(field),
-            "ENCODING" => self.try_parse_encoding(field),
-            "BLOCK SIZE" | "BLOCKSIZE" => self.try_parse_block_size(field),
-            "ENDIAN" => self.try_parse_endian(field),
+            "dimension" => self.try_parse_dimension(field),
+            "sizes" => self.try_parse_sizes(field),
+            "type" => self.try_parse_type(field),
+            "encoding" => self.try_parse_encoding(field),
+            "block size" | "blocksize" => self.try_parse_block_size(field),
+            "endian" => self.try_parse_endian(field),
             _ => Ok(()),
         }
     }
@@ -166,12 +184,26 @@ impl RequiredFields {
         let pixel_type = match field.descriptor.as_str() {
             "signed char" | "int8" | "int8_t" => PixelType::Int8,
             "uchar" | "unsigned char" | "uint8" | "uint8_t" => PixelType::UInt8,
-            "short" | "short int" | "signed short" | "signed short int" | "int16" | "int16_t" => PixelType::Int16,
-            "ushort" | "unsigned short" | "unsigned short int" | "uint16" | "uint16_t" => PixelType::UInt16,
+            "short" | "short int" | "signed short" | "signed short int" | "int16" | "int16_t" => {
+                PixelType::Int16
+            }
+            "ushort" | "unsigned short" | "unsigned short int" | "uint16" | "uint16_t" => {
+                PixelType::UInt16
+            }
             "int" | "signed int" | "int32" | "int32_t" => PixelType::Int32,
             "uint" | "unsigned int" | "uint32" | "uint32_t" => PixelType::UInt32,
-            "longlong" | "long long" | "long long int" | "signed long long" | "signed long long int" | "int64" | "int64_t" => PixelType::Int64,
-            "ulonglong" | "unsigned long long" | "unsigned long long int" | "uint64" | "uint64_t" => PixelType::UInt64,
+            "longlong"
+            | "long long"
+            | "long long int"
+            | "signed long long"
+            | "signed long long int"
+            | "int64"
+            | "int64_t" => PixelType::Int64,
+            "ulonglong"
+            | "unsigned long long"
+            | "unsigned long long int"
+            | "uint64"
+            | "uint64_t" => PixelType::UInt64,
             "float" => PixelType::Float32,
             "double" => PixelType::Float64,
             "block" => PixelType::Block(0), // Placeholder block size
@@ -217,7 +249,9 @@ impl RequiredFields {
 
     fn validate(mut self) -> Result<Self, ReadNrrdErr> {
         if self.dimension.is_none() {
-            return Err(ReadNrrdErr::Malformed("Missing DIMENSION field".to_string()));
+            return Err(ReadNrrdErr::Malformed(
+                "Missing DIMENSION field".to_string(),
+            ));
         }
 
         if self.sizes.is_none() {
@@ -229,17 +263,25 @@ impl RequiredFields {
                 // Block type NRRD should have a positive block size
                 match self.block_size {
                     Some(size) if size > 0 => *block_size = size,
-                    Some(_) => return Err(ReadNrrdErr::Malformed("Invalid BLOCK SIZE value".to_string())),
-                    None => return Err(ReadNrrdErr::Malformed("Missing BLOCK SIZE field".to_string())),
+                    Some(_) => {
+                        return Err(ReadNrrdErr::Malformed(
+                            "Invalid BLOCK SIZE value".to_string(),
+                        ))
+                    }
+                    None => {
+                        return Err(ReadNrrdErr::Malformed(
+                            "Missing BLOCK SIZE field".to_string(),
+                        ))
+                    }
                 };
-            },
+            }
             Some(_) => {
                 // NRRD that has type which size is bigger than 1 byte should have endian
                 match (self.endian, self.pixel_type) {
                     (None, Some(PixelType::Int8)) | (None, Some(PixelType::UInt8)) => (),
                     _ => return Err(ReadNrrdErr::Malformed("Missing ENDIAN field".to_string())),
                 };
-            },
+            }
             None => return Err(ReadNrrdErr::Malformed("Missing TYPE field".to_string())),
         };
 
@@ -253,11 +295,11 @@ impl RequiredFields {
 
 fn try_read_magic(magic_line: &str) -> Result<Version, ReadNrrdErr> {
     match magic_line {
-        "NRRD1" => Ok(Version::Nrrd1),
-        "NRRD2" => Ok(Version::Nrrd2),
-        "NRRD3" => Ok(Version::Nrrd3),
-        "NRRD4" => Ok(Version::Nrrd4),
-        "NRRD5" => Ok(Version::Nrrd5),
+        "NRRD0001" => Ok(Version::Nrrd1),
+        "NRRD0002" => Ok(Version::Nrrd2),
+        "NRRD0003" => Ok(Version::Nrrd3),
+        "NRRD0004" => Ok(Version::Nrrd4),
+        "NRRD0005" => Ok(Version::Nrrd5),
         _ => Err(ReadNrrdErr::UnknownVersion(format!(
             "Unknown NRRD version: {}",
             magic_line
@@ -267,7 +309,7 @@ fn try_read_magic(magic_line: &str) -> Result<Version, ReadNrrdErr> {
 
 fn try_read_field(line: &str) -> Option<Field> {
     let (ident, desc) = line.split_once(": ")?;
-    let clean_ident = ident.to_uppercase();
+    let clean_ident = ident.to_lowercase();
     let clean_desc = desc.trim_end();
 
     Some(Field {
@@ -287,4 +329,21 @@ fn try_read_key_value(line: &str) -> Option<KeyValue> {
         key: key.into(),
         value: value.into(),
     })
+}
+
+fn validate_buffer_size(nrrd: &Nrrd) -> bool {
+    let buf_size = nrrd.buffer.len();
+    let pixel_size = nrrd.pixel_type.size();
+    let num_pixels = nrrd.sizes.iter().product::<i32>() as usize;
+    let expected_buf_size = pixel_size * num_pixels;
+
+    buf_size == expected_buf_size
+}
+
+fn remove_trailing_new_line(line: &mut String) {
+    if line.ends_with("\r\n") {
+        line.truncate(line.len() - 2);
+    } else if line.ends_with('\n') {
+        line.pop();
+    }
 }
