@@ -2,6 +2,7 @@ use crate::nrrd::{Encoding, Endian, Field, KeyValue, Nrrd, PixelType, Version};
 use std::{
     collections::HashSet,
     io::{BufRead, BufReader, Read},
+    str::FromStr,
 };
 
 #[derive(Debug)]
@@ -174,35 +175,10 @@ impl RequiredFields {
     }
 
     fn try_parse_type(&mut self, field: &Field) -> Result<(), ReadNrrdErr> {
-        let pixel_type = match field.descriptor.as_str() {
-            "signed char" | "int8" | "int8_t" => PixelType::Int8,
-            "uchar" | "unsigned char" | "uint8" | "uint8_t" => PixelType::UInt8,
-            "short" | "short int" | "signed short" | "signed short int" | "int16" | "int16_t" => {
-                PixelType::Int16
-            }
-            "ushort" | "unsigned short" | "unsigned short int" | "uint16" | "uint16_t" => {
-                PixelType::UInt16
-            }
-            "int" | "signed int" | "int32" | "int32_t" => PixelType::Int32,
-            "uint" | "unsigned int" | "uint32" | "uint32_t" => PixelType::UInt32,
-            "longlong"
-            | "long long"
-            | "long long int"
-            | "signed long long"
-            | "signed long long int"
-            | "int64"
-            | "int64_t" => PixelType::Int64,
-            "ulonglong"
-            | "unsigned long long"
-            | "unsigned long long int"
-            | "uint64"
-            | "uint64_t" => PixelType::UInt64,
-            "float" => PixelType::Float32,
-            "double" => PixelType::Float64,
-            "block" => PixelType::Block(0), // Placeholder block size
-            _ => return Err(ReadNrrdErr::Malformed("Invalid TYPE value".to_string())),
-        };
-
+        let pixel_type = PixelType::from_str(&field.descriptor).map_err(|_| {
+            let err = format!("Invalid TYPE value");
+            ReadNrrdErr::Malformed(err)
+        })?;
         self.pixel_type = Some(pixel_type);
         Ok(())
     }

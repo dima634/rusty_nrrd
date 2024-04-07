@@ -1,7 +1,8 @@
 pub mod reader;
 pub mod writer;
 
-use std::{collections::HashSet, hash::Hash};
+use crate::{image::Image, pixel::PixelValue};
+use std::{collections::HashSet, hash::Hash, str::FromStr};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Version {
@@ -72,6 +73,59 @@ pub enum PixelType {
     Float32,
     Float64,
     Block(i32),
+}
+
+impl ToString for PixelType {
+    fn to_string(&self) -> String {
+        match self {
+            PixelType::Int8 => "int8".to_string(),
+            PixelType::UInt8 => "uint8".to_string(),
+            PixelType::Int16 => "int16".to_string(),
+            PixelType::UInt16 => "uint16".to_string(),
+            PixelType::Int32 => "int32".to_string(),
+            PixelType::UInt32 => "uint32".to_string(),
+            PixelType::Int64 => "int64".to_string(),
+            PixelType::UInt64 => "uint64".to_string(),
+            PixelType::Float32 => "float".to_string(),
+            PixelType::Float64 => "double".to_string(),
+            PixelType::Block(_) => "block".to_string(),
+        }
+    }
+}
+
+impl FromStr for PixelType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "signed char" | "int8" | "int8_t" => Ok(Self::Int8),
+            "uchar" | "unsigned char" | "uint8" | "uint8_t" => Ok(Self::UInt8),
+            "short" | "short int" | "signed short" | "signed short int" | "int16" | "int16_t" => {
+                Ok(Self::Int16)
+            }
+            "ushort" | "unsigned short" | "unsigned short int" | "uint16" | "uint16_t" => {
+                Ok(Self::UInt16)
+            }
+            "int" | "signed int" | "int32" | "int32_t" => Ok(Self::Int32),
+            "uint" | "unsigned int" | "uint32" | "uint32_t" => Ok(Self::UInt32),
+            "longlong"
+            | "long long"
+            | "long long int"
+            | "signed long long"
+            | "signed long long int"
+            | "int64"
+            | "int64_t" => Ok(Self::Int64),
+            "ulonglong"
+            | "unsigned long long"
+            | "unsigned long long int"
+            | "uint64"
+            | "uint64_t" => Ok(Self::UInt64),
+            "float" => Ok(Self::Float32),
+            "double" => Ok(Self::Float64),
+            "block" => Ok(Self::Block(0)), // Placeholder block size
+            _ => return Err(()),
+        }
+    }
 }
 
 impl PixelType {

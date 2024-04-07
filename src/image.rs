@@ -35,6 +35,16 @@ impl<T: PixelValue, const D: usize> Image<T, D> {
     }
 
     #[inline]
+    pub fn pixels(&self) -> &[T] {
+        &self.buffer
+    }
+
+    #[inline]
+    pub fn sizes(&self) -> &[usize; D] {
+        &self.sizes
+    }
+
+    #[inline]
     fn offset(&self, index: &[usize; D]) -> usize {
         let mut offset = 0;
         let mut stride = 1;
