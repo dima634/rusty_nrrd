@@ -4,6 +4,8 @@ use crate::nrrd::Nrrd;
 pub fn write_nrrd<T: Write>(nrrd: &Nrrd, writer: T) -> Result<(), std::io::Error> {
     let mut buf_writer = BufWriter::new(writer);
 
+    writeln!(buf_writer, "NRRD0005")?;
+
     for field in &nrrd.fields {
         writeln!(buf_writer, "{}: {}", field.identifier, field.descriptor)?;
     }
