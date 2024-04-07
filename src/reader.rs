@@ -49,21 +49,14 @@ fn read_header<T: BufRead>(reader: &mut T) -> Result<Nrrd, ReadNrrdErr> {
     loop {
         line.clear();
         reader.read_line(&mut line)?;
-        remove_trailing_new_line(&mut line);
-        
-        // Remove trailing newline characters
-        if line.ends_with("\r\n") {
-            line.truncate(line.len() - 2);
-        } else if line.ends_with('\n') {
-            line.pop();
-        }
-
         line_num += 1;
 
         if line == "\n" || line == "\r\n" {
             // End of header
             break;
         }
+
+        remove_trailing_new_line(&mut line);
 
         if line.starts_with('#') {
             // Comment
@@ -72,7 +65,7 @@ fn read_header<T: BufRead>(reader: &mut T) -> Result<Nrrd, ReadNrrdErr> {
 
         if let Some(field) = try_read_field(&line) {
             required_fields.parse(&field)?;
-            let exist = fields.insert(field.clone());
+            let exist = !fields.insert(field.clone());
 
             if exist {
                 return Err(ReadNrrdErr::DuplicateField(format!(
@@ -278,8 +271,10 @@ impl RequiredFields {
             Some(_) => {
                 // NRRD that has type which size is bigger than 1 byte should have endian
                 match (self.endian, self.pixel_type) {
-                    (None, Some(PixelType::Int8)) | (None, Some(PixelType::UInt8)) => (),
-                    _ => return Err(ReadNrrdErr::Malformed("Missing ENDIAN field".to_string())),
+                    (None, Some(t)) if t != PixelType::Int8 || t != PixelType::UInt8 => {
+                        return Err(ReadNrrdErr::Malformed("Missing ENDIAN field".to_string()))
+                    }
+                    _ => (),
                 };
             }
             None => return Err(ReadNrrdErr::Malformed("Missing TYPE field".to_string())),
