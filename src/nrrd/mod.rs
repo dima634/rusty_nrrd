@@ -217,3 +217,61 @@ impl Nrrd {
         self.version
     }
 }
+
+
+impl<T: PixelValue, const D: usize> From<&Image<T, D>> for Nrrd {
+    fn from(image: &Image<T, D>) -> Self {
+        let pixel_size = T::pixel_type().size();
+        let mut buffer = vec![Default::default(); image.pixels_count() * pixel_size];
+        let endian = Endian::Little;
+
+        let mut offset = 0;
+        for pixel in image.pixels() {
+            pixel.to_bytes(&mut buffer[offset..offset + pixel_size], endian);
+            offset += pixel_size;
+        }
+
+        Nrrd {
+            endian,
+            buffer,
+            dimension: D as i32,
+            sizes: image.sizes().iter().map(|&x| x as i32).collect(),
+            pixel_type: T::pixel_type(),
+            encoding: Encoding::Raw,
+            version: Version::Nrrd5,
+            fields: [
+                Field {
+                    identifier: "type".to_string(),
+                    descriptor: T::pixel_type().to_string(),
+                },
+                Field {
+                    identifier: "dimension".to_string(),
+                    descriptor: D.to_string(),
+                },
+                Field {
+                    identifier: "sizes".to_string(),
+                    descriptor: image
+                        .sizes()
+                        .iter()
+                        .map(|&x| x.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" "),
+                },
+                Field {
+                    identifier: "endian".to_string(),
+                    descriptor: match endian {
+                        Endian::Little => "little".to_string(),
+                        Endian::Big => "big".to_string(),
+                    },
+                },
+                Field {
+                    identifier: "encoding".to_string(),
+                    descriptor: "raw".to_string(),
+                },
+            ]
+            .into_iter()
+            .collect(),
+            key_values: HashSet::new(),
+        }
+    }
+}

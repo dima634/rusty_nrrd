@@ -58,6 +58,7 @@ impl<T: PixelValue, const D: usize> Image<T, D> {
     }
 }
 
+#[derive(Debug)]
 pub enum ImageFromNrrdErr {
     DimensionsDoNotMatch,
     PixelTypesDoNotMatch,
