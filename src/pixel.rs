@@ -1,7 +1,8 @@
 use crate::nrrd::{Endian, PixelType};
 
-pub trait PixelValue: Sized + Default + Clone    {
+pub trait PixelValue: Sized + Default + Clone {
     fn from_bytes(buffer: &[u8], endian: Endian) -> Self;
+    fn to_bytes(&self, buffer: &mut [u8], endian: Endian);
     fn pixel_type() -> PixelType;
 }
 
@@ -9,13 +10,20 @@ macro_rules! impl_pixel_value {
     ($type: ty, $pixel_type: expr) => {
         impl PixelValue for $type {
             fn from_bytes(buffer: &[u8], endian: Endian) -> Self {
-                const SIZE: usize = std::mem::size_of::<$type>();        
+                const SIZE: usize = std::mem::size_of::<$type>();
                 let mut bytes = [0; SIZE];
                 bytes.copy_from_slice(&buffer[..SIZE]);
 
                 match endian {
                     Endian::Big => <$type>::from_be_bytes(bytes),
                     Endian::Little => <$type>::from_le_bytes(bytes),
+                }
+            }
+
+            fn to_bytes(&self, buffer: &mut [u8], endian: Endian) {
+                match endian {
+                    Endian::Big => buffer.copy_from_slice(&self.to_be_bytes()),
+                    Endian::Little => buffer.copy_from_slice(&self.to_le_bytes()),
                 }
             }
 

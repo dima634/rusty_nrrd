@@ -1,5 +1,11 @@
+use crate::{
+    nrrd::{
+        reader::{read_nrrd, ReadNrrdErr},
+        Encoding, Nrrd,
+    },
+    pixel::PixelValue,
+};
 use std::io::Read;
-use crate::{nrrd::{Encoding, Nrrd}, pixel::PixelValue, reader::{read_nrrd, ReadNrrdErr}};
 
 pub struct Image<TPixel: PixelValue, const D: usize> {
     buffer: Vec<TPixel>,
@@ -25,7 +31,7 @@ impl<T: PixelValue, const D: usize> Image<T, D> {
 
     pub fn try_read_nrrd<TRead: Read>(reader: TRead) -> Result<Self, ImageFromNrrdErr> {
         let nrrd = read_nrrd(reader)?;
-        Self::try_from(nrrd)
+        Self::try_from(&nrrd)
     }
 
     #[inline]
@@ -56,25 +62,25 @@ impl From<ReadNrrdErr> for ImageFromNrrdErr {
     }
 }
 
-impl<T: PixelValue, const D: usize> TryFrom<Nrrd> for Image<T, D> {
+impl<T: PixelValue, const D: usize> TryFrom<&Nrrd> for Image<T, D> {
     type Error = ImageFromNrrdErr;
 
-    fn try_from(nrrd: Nrrd) -> Result<Self, Self::Error> {
-        if nrrd.dimension as usize != D {
+    fn try_from(nrrd: &Nrrd) -> Result<Self, Self::Error> {
+        if nrrd.dimension() as usize != D {
             return Err(ImageFromNrrdErr::DimensionsDoNotMatch);
         }
 
-        if T::pixel_type() != nrrd.pixel_type {
+        if T::pixel_type() != nrrd.pixel_type() {
             return Err(ImageFromNrrdErr::PixelTypesDoNotMatch);
         }
 
-        if nrrd.encoding != Encoding::Raw {
+        if *nrrd.encoding() != Encoding::Raw {
             return Err(ImageFromNrrdErr::UnsupportedEncoding);
         }
 
         let mut sizes = [0; D];
         for i in 0..D {
-            sizes[i] = nrrd.sizes[i] as usize;
+            sizes[i] = nrrd.sizes()[i] as usize;
         }
 
         let pixels = sizes.iter().product();
@@ -84,7 +90,7 @@ impl<T: PixelValue, const D: usize> TryFrom<Nrrd> for Image<T, D> {
         let mut offset = 0;
 
         for i in 0..pixels {
-            buffer[i] = T::from_bytes(&nrrd.buffer[offset..], nrrd.endian);
+            buffer[i] = T::from_bytes(&nrrd.buffer()[offset..], nrrd.endian());
             offset += pixel_size;
         }
 

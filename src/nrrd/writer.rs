@@ -1,5 +1,5 @@
-use std::io::{BufWriter, Write};
 use crate::nrrd::Nrrd;
+use std::io::{BufWriter, Write};
 
 pub fn write_nrrd<T: Write>(nrrd: &Nrrd, writer: T) -> Result<(), std::io::Error> {
     let mut buf_writer = BufWriter::new(writer);

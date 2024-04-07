@@ -1,3 +1,6 @@
+pub mod reader;
+pub mod writer;
+
 use std::{collections::HashSet, hash::Hash};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -77,7 +80,7 @@ impl PixelType {
         match self {
             PixelType::Int8 | PixelType::UInt8 => 1,
             PixelType::Int16 | PixelType::UInt16 => 2,
-            PixelType::Int32 | PixelType::UInt32 | PixelType::Float32   => 4,
+            PixelType::Int32 | PixelType::UInt32 | PixelType::Float32 => 4,
             PixelType::Int64 | PixelType::UInt64 | PixelType::Float64 => 8,
             PixelType::Block(size) => size as usize, // NRRD format accepts only positive block size so this should be safe
         }
@@ -101,15 +104,62 @@ pub enum Endian {
 
 #[derive(Debug, Clone)]
 pub struct Nrrd {
-    pub version: Version,
-    pub fields: HashSet<Field>,
-    pub key_values: HashSet<KeyValue>,
+    version: Version,
+    fields: HashSet<Field>,
+    key_values: HashSet<KeyValue>,
 
-    pub dimension: i32,
-    pub sizes: Vec<i32>,
-    pub pixel_type: PixelType,
-    pub encoding: Encoding,
-    pub endian: Endian,
+    dimension: i32,
+    sizes: Vec<i32>,
+    pixel_type: PixelType,
+    encoding: Encoding,
+    endian: Endian,
 
-    pub buffer: Vec<u8>,
+    buffer: Vec<u8>,
+}
+
+impl Nrrd {
+    #[inline]
+    pub fn buffer(&self) -> &Vec<u8> {
+        &self.buffer
+    }
+
+    #[inline]
+    pub fn dimension(&self) -> i32 {
+        self.dimension
+    }
+
+    #[inline]
+    pub fn pixel_type(&self) -> PixelType {
+        self.pixel_type
+    }
+
+    #[inline]
+    pub fn sizes(&self) -> &[i32] {
+        &self.sizes
+    }
+
+    #[inline]
+    pub fn endian(&self) -> Endian {
+        self.endian
+    }
+
+    #[inline]
+    pub fn encoding(&self) -> &Encoding {
+        &self.encoding
+    }
+
+    #[inline]
+    pub fn fields(&self) -> &HashSet<Field> {
+        &self.fields
+    }
+
+    #[inline]
+    pub fn key_values(&self) -> &HashSet<KeyValue> {
+        &self.key_values
+    }
+
+    #[inline]
+    pub fn version(&self) -> Version {
+        self.version
+    }
 }
