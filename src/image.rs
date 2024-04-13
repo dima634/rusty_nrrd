@@ -5,7 +5,10 @@ use crate::{
     },
     pixel::PixelValue,
 };
-use std::io::Read;
+use std::{
+    io::Read,
+    ops::{Index, IndexMut},
+};
 
 pub struct Image<TPixel: PixelValue, const D: usize> {
     buffer: Vec<TPixel>,
@@ -13,6 +16,13 @@ pub struct Image<TPixel: PixelValue, const D: usize> {
 }
 
 impl<T: PixelValue, const D: usize> Image<T, D> {
+    pub fn new(background: T, sizes: [usize; D]) -> Self {
+        Self {
+            sizes,
+            buffer: vec![background; sizes.iter().product()],
+        }
+    }
+
     #[inline]
     pub fn pixels_count(&self) -> usize {
         self.sizes.iter().product()
@@ -106,5 +116,36 @@ impl<T: PixelValue, const D: usize> TryFrom<&Nrrd> for Image<T, D> {
         }
 
         Ok(Self { buffer, sizes })
+    }
+}
+
+impl<T: PixelValue, const D: usize> Index<&[usize; D]> for Image<T, D> {
+    type Output = T;
+
+    #[inline]
+    fn index(&self, index: &[usize; D]) -> &Self::Output {
+        self.get(index)
+    }
+}
+
+impl<T: PixelValue, const D: usize> Index<[usize; D]> for Image<T, D> {
+    type Output = T;
+
+    #[inline]
+    fn index(&self, index: [usize; D]) -> &Self::Output {
+        self.get(&index)
+    }
+}
+
+impl<T: PixelValue, const D: usize> IndexMut<&[usize; D]> for Image<T, D> {
+    #[inline]
+    fn index_mut(&mut self, index: &[usize; D]) -> &mut Self::Output {
+        self.get_mut(index)
+    }
+}
+
+impl<T: PixelValue, const D: usize> IndexMut<[usize; D]> for Image<T, D> {
+    fn index_mut(&mut self, index: [usize; D]) -> &mut Self::Output {
+        self.get_mut(&index)
     }
 }
