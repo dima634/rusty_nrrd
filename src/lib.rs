@@ -1,3 +1,7 @@
 pub mod image;
-pub mod pixel;
 pub mod nrrd;
+pub mod pixel;
+
+pub use image::*;
+pub use nrrd::{reader::*, writer::*, *};
+pub use pixel::*;
